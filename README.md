@@ -73,7 +73,13 @@ repository](https://github.com/935963004/LaBraM) separately into ignored
 Git LFS pointer. Do not commit upstream code, weights, EEG or generated caches.
 
 ```bash
+conda activate eegfm
+python -c 'import sys, torch; print(sys.executable, torch.__version__, torch.cuda.is_available())'
 python -m pip install -r requirements.txt
+# On the current server (torch 2.11.0+cu128), force the matching CUDA 12.8 build.
+# The default package index can install torchvision 0.26.0 built for CUDA 13.0.
+python -m pip install --force-reinstall --no-deps 'torchvision==0.26.0+cu128' --index-url https://download.pytorch.org/whl/cu128
+python -c 'import torch, torchvision, timm; print(torch.__version__, torchvision.__version__, timm.__version__, torch.cuda.is_available())'
 python -m pip check
 python -m unittest discover -s tests -p test_labram_transfer.py -v
 git clone https://github.com/935963004/LaBraM.git third_party/LaBraM
@@ -107,6 +113,8 @@ point. Lee remains cue-paced throughout.
 Run from this package root. Set up a Python environment (Python 3.10+), install
 the required packages, and install a CUDA-compatible PyTorch wheel for the
 server's GPU. `requirements.txt` alone does not guarantee CUDA availability.
+Activate the existing `eegfm` environment first; running `pip` from `(base)`
+can install a different PyTorch/CUDA stack into the base environment.
 The E4b/I4 evaluation path imports `numba` transitively; it is a required
 dependency for this CBraMod evaluation, not an optional historical package.
 The historical scripts outside this pathway may have other optional dependencies.
