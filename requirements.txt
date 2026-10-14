@@ -2,3 +2,6 @@ numpy>=1.24
 scipy>=1.10
 torch>=2.8
 scikit-learn>=1.6
+numba>=0.60
+timm>=0.9,<1.0
+einops>=0.6

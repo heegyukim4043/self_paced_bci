@@ -40,17 +40,76 @@ New uploadable code:
 - `scripts/run_cbramod_original_continuous_20261014.py`: frozen I4 FP1/2/4/8
   evaluation on the original chronological Lee recording.
 - `tests/test_cbramod_transfer.py`: CPU-only causality, montage, source-split
-  and target-exclusion checks. A real checkpoint/GPU smoke test is still needed.
+  and target-exclusion checks, plus an import check for the evaluation path.
+  The published checkpoint loaded in a one-subject GPU smoke test. The
+  frozen-probe 54-subject x 2-session run was subsequently completed on the
+  server; it showed no consistent low-FP gain over the Riemannian comparator.
 
 The older `large_causal_cnn_gru.py` and its runners are a separate, optional
 capacity control. **Do not run them as a substitute for CBraMod.**
+
+## Second pretrained model: LaBraM base (prepared, not yet run)
+
+LaBraM is a separate frozen-backbone experiment. It uses the official
+`labram-base.pth` weights, 19 Lee electrodes with published channel-position
+indices, causal 0.1-75 Hz and 50 Hz-notch filtering, 200 Hz sampling, and only
+the trailing 2 s at each decision. A source-only LOSO linear probe uses the
+same 256 trial-0..49 examples per donor as CBraMod. Its scores follow the same
+I4 FP1/2/4/8 threshold and circular-shift evaluation. The preprocessing
+differs from CBraMod, so results compare **model plus input pipeline**, not
+isolated architecture effects. No LaBraM performance result exists yet.
+
+New files to upload with this README and `requirements.txt`:
+
+- `src/uncued_mi/labram_transfer.py`
+- `scripts/cache_labram_features_original_continuous_20261014.py`
+- `scripts/fit_labram_loso_original_continuous_20261014.py`
+- `scripts/run_labram_original_continuous_20261014.py`
+- `tests/test_labram_transfer.py`
+
+On the server, update this code repository. Clone the [official LaBraM
+repository](https://github.com/935963004/LaBraM) separately into ignored
+`third_party/LaBraM`. Verify that its checkpoint is a real weight file, not a
+Git LFS pointer. Do not commit upstream code, weights, EEG or generated caches.
+
+```bash
+python -m pip install -r requirements.txt
+python -m pip check
+python -m unittest discover -s tests -p test_labram_transfer.py -v
+git clone https://github.com/935963004/LaBraM.git third_party/LaBraM
+git -C third_party/LaBraM rev-parse HEAD
+ls -lh third_party/LaBraM/checkpoints/labram-base.pth
+sha256sum third_party/LaBraM/checkpoints/labram-base.pth
+python scripts/cache_labram_features_original_continuous_20261014.py --subjects 1 --sessions 1 --input-unit uV --device cuda
+```
+
+The one-subject extraction must load every encoder weight and return finite
+800-dimensional features. A safe-load failure is a **stop condition**; do not
+use random weights or disable checkpoint validation. After checking the cache,
+run the full cohort. Even `--subjects 1` during fitting requires all 54
+feature caches for that session (53 donors plus target).
+
+```bash
+python -u scripts/cache_labram_features_original_continuous_20261014.py --input-unit uV --device cuda
+python scripts/fit_labram_loso_original_continuous_20261014.py --subjects 1 --sessions 1
+python scripts/run_labram_original_continuous_20261014.py --limit-cases 1
+python -u scripts/fit_labram_loso_original_continuous_20261014.py
+python -u scripts/run_labram_original_continuous_20261014.py
+```
+
+The result is `data/processed/labram_original_continuous_20261014.json`.
+Report actual FP/min, SEN@2s and circular-shift excess; compare LaBraM with
+CBraMod and Riemannian at matched achieved FP as well as the frozen operating
+point. Lee remains cue-paced throughout.
 
 ## On the Ubuntu server
 
 Run from this package root. Set up a Python environment (Python 3.10+), install
 the required packages, and install a CUDA-compatible PyTorch wheel for the
 server's GPU. `requirements.txt` alone does not guarantee CUDA availability.
-The historical scripts may have optional dependencies not listed there.
+The E4b/I4 evaluation path imports `numba` transitively; it is a required
+dependency for this CBraMod evaluation, not an optional historical package.
+The historical scripts outside this pathway may have other optional dependencies.
 
 ```bash
 python -c 'import torch; print(torch.__version__, torch.cuda.is_available())'
@@ -59,6 +118,7 @@ python scripts/download_lee2019_mi_server.py --subjects 1 --sessions 1
 python scripts/download_lee2019_mi_server.py
 python scripts/download_lee2019_mi_server.py --verify-only
 python -m unittest discover -s tests -p test_cbramod_transfer.py -v
+python -m pip check
 python scripts/prepare_tier0_cache.py --all --sessions 1 2
 python scripts/preflight_e4_full_trial_blocks_20261009.py
 python scripts/preflight_e4b_task_idle_20261010.py
