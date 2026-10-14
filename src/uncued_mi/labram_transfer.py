@@ -104,6 +104,16 @@ def _student_weights(checkpoint: object, model: torch.nn.Module) -> dict:
     return weights
 
 
+def _make_official_backbone(module):
+    """Match the published base pretraining/fine-tuning layer-scale setting."""
+    return module.labram_base_patch200_200(
+        pretrained=False, EEG_size=WINDOW, num_classes=0,
+        use_mean_pooling=False, use_abs_pos_emb=True,
+        use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
+        qkv_bias=False, init_values=0.1,
+    )
+
+
 def load_frozen_backbone(repo: Path, checkpoint: Path, device: torch.device):
     repo, checkpoint = repo.resolve(), checkpoint.resolve()
     source = repo / "modeling_finetune.py"
@@ -115,11 +125,7 @@ def load_frozen_backbone(repo: Path, checkpoint: Path, device: torch.device):
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    model = module.labram_base_patch200_200(
-        pretrained=False, EEG_size=WINDOW, num_classes=0,
-        use_mean_pooling=False, use_abs_pos_emb=True,
-        use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
-    )
+    model = _make_official_backbone(module)
     try:
         # Official training checkpoints may retain their argparse.Namespace.
         # Allowlist only that standard-library container, never arbitrary code.
