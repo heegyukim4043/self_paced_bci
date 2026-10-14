@@ -95,6 +95,12 @@ use random weights or disable checkpoint validation. After checking the cache,
 run the full cohort. Even `--subjects 1` during fitting requires all 54
 feature caches for that session (53 donors plus target).
 
+The server-observed LaBraM base checkpoint is 96,612,769 bytes with SHA-256
+`7c50583826afac76c4ab18f43d958df40496c8229accc09ed6a227c9bb57c37c`.
+Its training metadata includes NumPy scalars. The loader inspects pickle
+globals, permits only the known Namespace/NumPy metadata types, and retains
+`weights_only=True`; never switch to `weights_only=False` as a workaround.
+
 ```bash
 python -u scripts/cache_labram_features_original_continuous_20261014.py --input-unit uV --device cuda
 python scripts/fit_labram_loso_original_continuous_20261014.py --subjects 1 --sessions 1

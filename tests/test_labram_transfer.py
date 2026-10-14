@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
+import datetime
 import sys
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -15,7 +18,8 @@ sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 
 from uncued_mi.labram_transfer import (
     FEATURE_DIM, PRETRAIN_CHANNELS, SFREQ, WINDOW, _student_weights,
-    _make_official_backbone, causal_lee_200hz, encode_ends, input_channel_positions,
+    _make_official_backbone, _load_official_checkpoint_safely,
+    causal_lee_200hz, encode_ends, input_channel_positions,
     training_ends, trailing_windows,
 )
 
@@ -28,6 +32,23 @@ class DummyLaBraM(torch.nn.Module):
 
 
 class LaBraMTransferTest(unittest.TestCase):
+    def test_safe_checkpoint_loader_accepts_numpy_scalar_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "official_like.pth"
+            torch.save({"model": {"student.weight": torch.ones(1)},
+                        "args": argparse.Namespace(epoch=1),
+                        "metric": np.float64(0.5)}, path)
+            raw = _load_official_checkpoint_safely(path)
+            self.assertEqual(float(raw["metric"]), 0.5)
+            self.assertTrue(torch.equal(raw["model"]["student.weight"], torch.ones(1)))
+
+    def test_safe_checkpoint_loader_rejects_unexpected_globals(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "unexpected.pth"
+            torch.save({"created": datetime.datetime(2026, 1, 1)}, path)
+            with self.assertRaisesRegex(ValueError, "unexpected checkpoint globals"):
+                _load_official_checkpoint_safely(path)
+
     def test_factory_uses_official_base_layer_scale(self):
         class FakeOfficialModule:
             @staticmethod

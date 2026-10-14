@@ -114,6 +114,51 @@ def _make_official_backbone(module):
     )
 
 
+def _load_official_checkpoint_safely(checkpoint: Path) -> dict:
+    """Read the published checkpoint without permitting arbitrary pickle globals.
+
+    The official base file includes training metadata in addition to tensors.
+    Its inspected pickle GLOBALs are Namespace, NumPy scalar and NumPy dtype;
+    NumPy's concrete numeric dtype classes are built dynamically and therefore
+    do not appear in the static GLOBAL list.
+    """
+    allowed = {
+        "argparse.Namespace", "numpy.core.multiarray.scalar",
+        "numpy._core.multiarray.scalar", "numpy.dtype",
+    }
+    try:
+        found = set(torch.serialization.get_unsafe_globals_in_checkpoint(checkpoint))
+    except Exception as exc:
+        raise ValueError("cannot inspect LaBraM checkpoint globals safely") from exc
+    unexpected = found - allowed
+    if unexpected:
+        raise ValueError(f"unexpected checkpoint globals: {sorted(unexpected)}")
+
+    # The two scalar paths cover checkpoints written by older and newer NumPy.
+    numpy_core = np._core if hasattr(np, "_core") else np.core
+    scalar = numpy_core.multiarray.scalar
+    numeric_dtypes = (
+        "bool", "int8", "int16", "int32", "int64", "uint8", "uint16",
+        "uint32", "uint64", "float16", "float32", "float64",
+        "complex64", "complex128",
+    )
+    dtype_classes = {type(np.dtype(name)) for name in numeric_dtypes}
+    safe = [
+        argparse.Namespace,
+        (scalar, "numpy.core.multiarray.scalar"),
+        (scalar, "numpy._core.multiarray.scalar"),
+        np.dtype, *dtype_classes,
+    ]
+    try:
+        with torch.serialization.safe_globals(safe):
+            return torch.load(checkpoint, map_location="cpu", weights_only=True)
+    except Exception as exc:
+        raise ValueError(
+            "LaBraM checkpoint cannot be read with the inspected safe globals; "
+            "do not disable weights_only or bypass checkpoint validation"
+        ) from exc
+
+
 def load_frozen_backbone(repo: Path, checkpoint: Path, device: torch.device):
     repo, checkpoint = repo.resolve(), checkpoint.resolve()
     source = repo / "modeling_finetune.py"
@@ -126,16 +171,7 @@ def load_frozen_backbone(repo: Path, checkpoint: Path, device: torch.device):
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     model = _make_official_backbone(module)
-    try:
-        # Official training checkpoints may retain their argparse.Namespace.
-        # Allowlist only that standard-library container, never arbitrary code.
-        with torch.serialization.safe_globals([argparse.Namespace]):
-            raw = torch.load(checkpoint, map_location="cpu", weights_only=True)
-    except Exception as exc:
-        raise ValueError(
-            "LaBraM checkpoint cannot be read safely with weights_only=True; "
-            "verify or convert the official checkpoint to a tensor-only state dict"
-        ) from exc
+    raw = _load_official_checkpoint_safely(checkpoint)
     weights = _student_weights(raw, model)
     model.load_state_dict(weights, strict=True)
     model.to(device).eval()
