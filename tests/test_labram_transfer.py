@@ -15,7 +15,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 
 from uncued_mi.labram_transfer import (
     FEATURE_DIM, PRETRAIN_CHANNELS, SFREQ, WINDOW, _student_weights,
-    causal_lee_200hz, encode_ends, input_channel_positions,
+    _make_official_backbone, causal_lee_200hz, encode_ends, input_channel_positions,
     training_ends, trailing_windows,
 )
 
@@ -28,6 +28,19 @@ class DummyLaBraM(torch.nn.Module):
 
 
 class LaBraMTransferTest(unittest.TestCase):
+    def test_factory_uses_official_base_layer_scale(self):
+        class FakeOfficialModule:
+            @staticmethod
+            def labram_base_patch200_200(**kwargs):
+                # The upstream Block raises if init_values is None.
+                if not kwargs["init_values"] > 0:
+                    raise TypeError("LaBraM base requires positive layer scale")
+                return kwargs
+
+        settings = _make_official_backbone(FakeOfficialModule())
+        self.assertEqual(settings["init_values"], 0.1)
+        self.assertFalse(settings["use_mean_pooling"])
+
     def test_entrypoints_import_without_data(self):
         for script in (
             "cache_labram_features_original_continuous_20261014.py",
