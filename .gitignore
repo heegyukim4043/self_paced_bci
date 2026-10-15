@@ -1,0 +1,5 @@
+data/
+logs/
+third_party/
+__pycache__/
+*.py[cod]
