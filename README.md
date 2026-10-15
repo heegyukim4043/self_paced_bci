@@ -18,6 +18,24 @@ Keep the code package separate from the large research workspace and raw EEG.
 | `tests/` | Code checks, including causal-model tests |
 | `requirements.txt`, `.gitignore` | Minimal Python dependencies and data/secret exclusions |
 
+## External-data G0 audit (Dreyer/WBCIC, prepared 2026-10-15)
+
+`scripts/audit_external_mi_bids_20261015.py` and its CPU-only test are ready
+for the first raw-data preflight. They inventory BIDS event chronology, label
+counts, EEG media, sidecars, channel units, subject/run counts and file hashes.
+They **never infer idle from unlabeled gaps** and always report
+`training_ready=false` until original-source event timing and actual idle
+support have been checked separately. No Dreyer/WBCIC continued training has
+been run. The research-workspace execution note is
+`EXTERNAL_MI_G0_EXECUTION_20261015.md` (not required in this code-only repo).
+
+```bash
+python -m unittest discover -s tests -p test_external_mi_bids_audit_20261015.py -v
+python scripts/audit_external_mi_bids_20261015.py --dataset dreyer \
+  --dataset-root data/external/nm000250 --max-events-files 3 \
+  --output data/processed/g0_dreyer_smoke.json
+```
+
 ## Current large-model experiment: pretrained CBraMod
 
 The intended new model is **CBraMod**, not a widened CNN-GRU. Its published
@@ -48,7 +66,7 @@ New uploadable code:
 The older `large_causal_cnn_gru.py` and its runners are a separate, optional
 capacity control. **Do not run them as a substitute for CBraMod.**
 
-## Second pretrained model: LaBraM base (prepared, not yet run)
+## Second pretrained model: LaBraM base (frozen-probe run completed)
 
 LaBraM is a separate frozen-backbone experiment. It uses the official
 `labram-base.pth` weights, 19 Lee electrodes with published channel-position
@@ -57,7 +75,9 @@ the trailing 2 s at each decision. A source-only LOSO linear probe uses the
 same 256 trial-0..49 examples per donor as CBraMod. Its scores follow the same
 I4 FP1/2/4/8 threshold and circular-shift evaluation. The preprocessing
 differs from CBraMod, so results compare **model plus input pipeline**, not
-isolated architecture effects. No LaBraM performance result exists yet.
+isolated architecture effects. The 54-subject x 2-session frozen-probe server
+run was completed and its JSON copied to the research workspace on 2026-10-15.
+It is **not** Dreyer/WBCIC continued training; the latter remains behind G0.
 
 New files to upload with this README and `requirements.txt`:
 
